@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-distill"
+version = "0.1.0"
+description = "Distil Claude Code session transcripts into signal-only Markdown"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["claude", "claude-code", "transcript", "memory", "obsidian"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Utilities",
+]
+dependencies = []
+
+[project.scripts]
+claude-distill = "claude_distill.distill:main"
+
+[tool.setuptools]
+packages = ["claude_distill"]
