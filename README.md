@@ -82,12 +82,34 @@ fetch your own history, so the only way to get them is the official export:
 Settings, then Privacy, then Export data. You get an email with a ZIP. Inside is
 `conversations.json`. The link expires after 24 hours.
 
-Point the tool at that file and the chats come through as the same kind of notes:
+Unzip everything and point the tool at the folder:
 
 ```
-python -m claude_distill.distill --web-export conversations.json --out ./distilled
-python -m claude_distill.distill --web-export conversations.json --web-only --out ./distilled
+python -m claude_distill.distill --export-dir ./claude-export-2026-09-13 --out ./vault
 ```
+
+That finds `conversations.json` on its own, and also picks up your projects and
+memories. If you only have the conversations file, use `--web-export` instead,
+and add `--web-only` to skip local transcripts.
+
+### Projects and memories
+
+An export has four archives. Conversations are the noisy part and get distilled.
+Projects and memories are the opposite: already curated, so they are carried
+across whole.
+
+Projects become one note each, with the custom instructions and every attached
+document. Memories become one note per memory file, plus the rolling
+conversation memory. Memory files carry their own frontmatter, which is merged
+into the note's rather than emitted twice, because Obsidian only reads the first
+block.
+
+This is the half worth keeping. A conversation you can roughly remember. A
+prompt template you wrote six months ago you cannot.
+
+The fourth archive, `light_metadata`, holds your login history and a
+`users.json` with your email address and phone number. It is skipped on purpose.
+None of it belongs in a notes vault.
 
 Both sources end up in one directory with one index, tagged `claude-code` or
 `claude-web` so you can tell them apart or filter on them in a vault.

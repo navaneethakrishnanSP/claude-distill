@@ -317,6 +317,19 @@ def default_projects_dir() -> str:
     return os.path.join(os.path.expanduser("~"), ".claude", "projects")
 
 
+def find_conversations(export_dir: str) -> str | None:
+    """Locate conversations.json inside an extracted export.
+
+    An export often contains the file twice - once where the archive unpacked it
+    and once wherever it was extracted by hand - so take the first and ignore the
+    duplicate rather than distilling the same chats twice.
+    """
+    for root, _dirs, files in os.walk(export_dir):
+        if "conversations.json" in files:
+            return os.path.join(root, "conversations.json")
+    return None
+
+
 def find_transcripts(projects_dir: str, project: str | None) -> list[str]:
     pattern = os.path.join(projects_dir, project or "*", "*.jsonl")
     return sorted(glob.glob(pattern))
@@ -345,10 +358,18 @@ def main(argv: list[str] | None = None) -> int:
                              "(Settings > Privacy > Export data)")
     parser.add_argument("--web-only", action="store_true",
                         help="read only the web export, skip local transcripts")
+    parser.add_argument("--export-dir", default=None, metavar="DIR",
+                        help="an extracted claude.ai export: finds conversations.json, "
+                             "projects and memories underneath it")
     args = parser.parse_args(argv)
 
+    if args.export_dir and not args.web_export:
+        args.web_export = find_conversations(args.export_dir)
+        if not args.web_export:
+            print(f"no conversations.json under {args.export_dir}", file=sys.stderr)
+
     if args.web_only and not args.web_export:
-        print("--web-only needs --web-export", file=sys.stderr)
+        print("--web-only needs --web-export or --export-dir", file=sys.stderr)
         return 1
 
     transcripts: list[str] = []
@@ -425,6 +446,12 @@ def main(argv: list[str] | None = None) -> int:
         target = os.path.join(args.out, name)
         with io.open(target, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(render_markdown(session))
+
+    if args.export_dir:
+        from .knowledge import write_knowledge
+        n_projects, n_memories = write_knowledge(args.export_dir, args.out)
+        if n_projects or n_memories:
+            print(f"wrote {n_projects} project and {n_memories} memory notes")
 
     index = os.path.join(args.out, "index.md")
     with io.open(index, "w", encoding="utf-8", newline="\n") as fh:
