@@ -73,6 +73,31 @@ Options:
 - `--since` only sessions on or after a date
 - `--stats` print the summary and stop
 
+## Web chats
+
+Claude Code sessions are on your disk, so those are read automatically. Your
+claude.ai chats are not. They sit on Anthropic's servers and there is no API to
+fetch your own history, so the only way to get them is the official export:
+
+Settings, then Privacy, then Export data. You get an email with a ZIP. Inside is
+`conversations.json`. The link expires after 24 hours.
+
+Point the tool at that file and the chats come through as the same kind of notes:
+
+```
+python -m claude_distill.distill --web-export conversations.json --out ./distilled
+python -m claude_distill.distill --web-export conversations.json --web-only --out ./distilled
+```
+
+Both sources end up in one directory with one index, tagged `claude-code` or
+`claude-web` so you can tell them apart or filter on them in a vault.
+
+Be clear about what this does and doesn't automate. The Claude Code half is fully
+automatic, and you can run it from a hook or a scheduled task. The web half is not,
+and can't be: the export is a manual step and nothing can trigger it for you. In
+practice your Claude Code history stays current and your web history is a snapshot
+you refresh when you remember to.
+
 ## What it keeps
 
 Your prompts. Corrections, meaning turns where you told the agent it was going the

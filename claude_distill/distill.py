@@ -136,6 +136,8 @@ class Session:
     path: str = ""
     cwd: str = ""
     branch: str = ""
+    source: str = "claude-code"  # or "claude-web"
+    name: str = ""  # explicit title, when the source provides one
     started: str = ""
     ended: str = ""
     prompts: list[str] = field(default_factory=list)
@@ -152,7 +154,9 @@ class Session:
 
     @property
     def title(self) -> str:
-        """First prompt, trimmed - the closest thing to a session's subject."""
+        """The conversation's own name if it has one, else the first prompt."""
+        if self.name:
+            return _shorten(self.name, 70)
         return _shorten(self.prompts[0], 70) if self.prompts else "(no prompt)"
 
     @property
@@ -225,6 +229,7 @@ def render_markdown(session: Session, *, max_prompts: int = 40) -> str:
     out.append(f'title: "{session.title.replace(chr(34), chr(39))}"')
     out.append(f"date: {session.date}")
     out.append(f"session_id: {session.session_id}")
+    out.append(f"source: {session.source}")
     out.append(f"cwd: {session.cwd}")
     if session.branch:
         out.append(f"branch: {session.branch}")
@@ -232,7 +237,7 @@ def render_markdown(session: Session, *, max_prompts: int = 40) -> str:
     out.append(f"corrections: {len(session.corrections)}")
     out.append(f"interrupts: {session.interrupts}")
     out.append(f"files_touched: {len(session.files_touched)}")
-    out.append("tags: [claude-session]")
+    out.append(f"tags: [claude-session, {session.source}]")
     out.append("---")
     out.append("")
     out.append(f"# {session.title}")
@@ -335,18 +340,41 @@ def main(argv: list[str] | None = None) -> int:
                         help="only sessions on or after this date")
     parser.add_argument("--stats", action="store_true",
                         help="print a compression summary and exit")
+    parser.add_argument("--web-export", default=None, metavar="conversations.json",
+                        help="also read a claude.ai data export "
+                             "(Settings > Privacy > Export data)")
+    parser.add_argument("--web-only", action="store_true",
+                        help="read only the web export, skip local transcripts")
     args = parser.parse_args(argv)
 
-    transcripts = find_transcripts(args.projects_dir, args.project)
-    if not transcripts:
-        print(f"no transcripts under {args.projects_dir}", file=sys.stderr)
+    if args.web_only and not args.web_export:
+        print("--web-only needs --web-export", file=sys.stderr)
         return 1
 
-    sessions: list[Session] = []
+    transcripts: list[str] = []
+    if not args.web_only:
+        transcripts = find_transcripts(args.projects_dir, args.project)
+        if not transcripts and not args.web_export:
+            print(f"no transcripts under {args.projects_dir}", file=sys.stderr)
+            return 1
+
+    candidates: list[Session] = []
     raw_bytes = 0
     for path in transcripts:
         raw_bytes += os.path.getsize(path)
-        session = distil_file(path)
+        candidates.append(distil_file(path))
+
+    if args.web_export:
+        from .webexport import load_web_export
+        try:
+            raw_bytes += os.path.getsize(args.web_export)
+            candidates.extend(load_web_export(args.web_export))
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"could not read {args.web_export}: {exc}", file=sys.stderr)
+            return 1
+
+    sessions: list[Session] = []
+    for session in candidates:
         if len(session.prompts) < args.min_prompts:
             continue
         if args.since and session.date and session.date < args.since:
@@ -361,6 +389,9 @@ def main(argv: list[str] | None = None) -> int:
         out_bytes = sum(len(render_markdown(s).encode("utf-8")) for s in sessions)
         ratio = raw_bytes / out_bytes if out_bytes else 0
         print(f"transcripts : {len(transcripts)}")
+        web = sum(1 for x in sessions if x.source == "claude-web")
+        if web:
+            print(f"web chats   : {web}")
         print(f"sessions    : {len(sessions)}")
         print(f"raw         : {raw_bytes/1_048_576:.1f} MB")
         print(f"distilled   : {out_bytes/1024:.1f} KB")
@@ -375,6 +406,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = [
             {
                 "session_id": s.session_id, "date": s.date, "cwd": s.cwd,
+                "source": s.source,
                 "branch": s.branch, "title": s.title, "prompts": s.prompts,
                 "corrections": s.corrections, "interrupts": s.interrupts,
                 "files_touched": dict(s.files_touched), "commands": s.commands,
