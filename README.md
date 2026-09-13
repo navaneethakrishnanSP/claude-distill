@@ -92,6 +92,16 @@ python -m claude_distill.distill --web-export conversations.json --web-only --ou
 Both sources end up in one directory with one index, tagged `claude-code` or
 `claude-web` so you can tell them apart or filter on them in a vault.
 
+The export is a ZIP containing `conversations.json`, plus separate archives for
+projects, memories and account metadata. Only the conversations file is used.
+
+Some messages carry no text at all: the text field is empty and the content block
+list is empty too. Usually that is an old image-only upload with nothing retained.
+Occasionally the text is in `attachments[].extracted_content` instead, which is a
+file you pasted in. Those are excerpted to 300 characters rather than inlined,
+because a pasted CSV can run to tens of thousands of characters and that is the
+bulk this tool exists to remove.
+
 Be clear about what this does and doesn't automate. The Claude Code half is fully
 automatic, and you can run it from a hook or a scheduled task. The web half is not,
 and can't be: the export is a manual step and nothing can trigger it for you. In

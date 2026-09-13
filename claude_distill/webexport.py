@@ -39,20 +39,45 @@ from .distill import CORRECTION_MARKERS, Session
 __all__ = ["load_web_export", "parse_conversation"]
 
 
+ATTACHMENT_EXCERPT = 300
+
+
 def _message_text(message: dict) -> str:
     """Pull the text out of a message, whichever field it landed in.
 
-    Older exports put everything in `text`; newer ones sometimes leave that empty
-    and use a `content` block list instead.
+    Three places, in order. Older exports put everything in `text`; newer ones
+    sometimes leave that empty and use a `content` block list; and a message that
+    was nothing but an uploaded file carries its text in `attachments`.
+
+    Attachment text is excerpted rather than inlined. A pasted file can run to
+    tens of thousands of characters, which is exactly the bulk this tool exists
+    to remove - but knowing a file was shared, and which one, is signal.
     """
     text = (message.get("text") or "").strip()
     if text:
         return text
+
     parts = []
     for block in message.get("content") or []:
         if isinstance(block, dict) and block.get("type") == "text":
             parts.append(block.get("text", ""))
-    return "\n".join(p for p in parts if p).strip()
+    text = "\n".join(p for p in parts if p).strip()
+    if text:
+        return text
+
+    for attachment in message.get("attachments") or []:
+        if not isinstance(attachment, dict):
+            continue
+        extracted = (attachment.get("extracted_content") or "").strip()
+        if not extracted:
+            continue
+        name = attachment.get("file_name") or "file"
+        excerpt = " ".join(extracted.split())[:ATTACHMENT_EXCERPT]
+        if len(extracted) > ATTACHMENT_EXCERPT:
+            excerpt += "…"
+        return f"[attachment: {name}] {excerpt}"
+
+    return ""
 
 
 def parse_conversation(conversation: dict) -> Session:

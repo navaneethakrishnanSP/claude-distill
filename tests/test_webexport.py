@@ -114,5 +114,32 @@ class TestLoading(unittest.TestCase):
             load_web_export(path)
 
 
+
+class TestAttachments(unittest.TestCase):
+    """A message that was only an uploaded file still carries its text."""
+
+    def test_attachment_text_used_as_last_resort(self):
+        m = msg("human", text="", content=[])
+        m["attachments"] = [{"file_name": "notes.txt",
+                             "extracted_content": "the actual pasted content"}]
+        s = parse_conversation(conversation([m]))
+        self.assertEqual(s.prompts, ["[attachment: notes.txt] the actual pasted content"])
+
+    def test_long_attachment_is_excerpted_not_inlined(self):
+        m = msg("human", text="", content=[])
+        m["attachments"] = [{"file_name": "big.csv", "extracted_content": "x" * 50000}]
+        s = parse_conversation(conversation([m]))
+        self.assertLess(len(s.prompts[0]), 400)
+        self.assertTrue(s.prompts[0].endswith("…"))
+
+    def test_empty_attachment_yields_nothing(self):
+        m = msg("human", text="", content=[])
+        m["attachments"] = [{"file_name": "", "extracted_content": ""}]
+        self.assertEqual(parse_conversation(conversation([m])).prompts, [])
+
+    def test_real_text_wins_over_attachment(self):
+        m = msg("human", "what I typed")
+        m["attachments"] = [{"file_name": "a.txt", "extracted_content": "file body"}]
+        self.assertEqual(parse_conversation(conversation([m])).prompts, ["what I typed"])
 if __name__ == "__main__":
     unittest.main(verbosity=2)
